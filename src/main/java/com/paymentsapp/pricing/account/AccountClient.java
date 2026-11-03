@@ -52,5 +52,10 @@ public class AccountClient {
         public boolean isWallet() {
             return "WALLET".equals(type);
         }
+
+        // Привязанная карта другого банка
+        public boolean isExternal() {
+            return "EXTERNAL_CARD".equals(type);
+        }
     }
 }

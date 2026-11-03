@@ -43,7 +43,9 @@ public class CommissionService {
     public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount,
                                 String recipientCardNumber, UUID destinationAccountId) {
         AccountUser user = accountClient.getUser(userId);
-        Party source = user.account(sourceAccountId).isWallet() ? Party.WALLET : Party.OUR_CARD;
+        AccountClient.AccountRef sourceAccount = user.account(sourceAccountId);
+        Party source = sourceAccount.isWallet() ? Party.WALLET
+                : sourceAccount.isExternal() ? Party.OTHER_BANK_CARD : Party.OUR_CARD;
 
         String recipientKey = null;
         Party destination = switch (operationType) {
@@ -62,7 +64,11 @@ public class CommissionService {
                     throw new IllegalArgumentException("Не выбран счёт зачисления");
                 }
                 recipientKey = destinationAccountId.toString();
-                yield user.account(destinationAccountId).isWallet() ? Party.WALLET : Party.OUR_CARD;
+                AccountClient.AccountRef target = user.account(destinationAccountId);
+                if (target.isExternal()) {
+                    throw new OperationNotAvailableException("Зачислить на карту другого банка отсюда нельзя");
+                }
+                yield target.isWallet() ? Party.WALLET : Party.OUR_CARD;
             }
         };
 

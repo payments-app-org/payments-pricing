@@ -5,3 +5,6 @@ databaseChangeLog:
   - include:
       file: changes/002-tariff-matrix.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/003-linked-card-tariffs.sql
+      relativeToChangelogFile: true
