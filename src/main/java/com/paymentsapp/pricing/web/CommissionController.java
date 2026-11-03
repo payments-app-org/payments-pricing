@@ -6,6 +6,8 @@ import com.paymentsapp.pricing.commission.CommissionService;
 import com.paymentsapp.pricing.commission.Party;
 import com.paymentsapp.pricing.commission.Subscription;
 import com.paymentsapp.pricing.commission.TariffService;
+import com.paymentsapp.pricing.fx.FxQuote;
+import com.paymentsapp.pricing.fx.FxService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -23,11 +25,24 @@ public class CommissionController {
     private final CommissionService commissionService;
     private final TariffService tariffs;
     private final AccountClient accountClient;
+    private final FxService fx;
 
-    public CommissionController(CommissionService commissionService, TariffService tariffs, AccountClient accountClient) {
+    public CommissionController(CommissionService commissionService, TariffService tariffs, AccountClient accountClient,
+                                FxService fx) {
         this.commissionService = commissionService;
         this.tariffs = tariffs;
         this.accountClient = accountClient;
+        this.fx = fx;
+    }
+
+    // Перевод за рубеж: пересчёт по курсу в обе стороны — по сумме списания или по сумме к получению
+    @PostMapping("/fx-quote")
+    public FxQuote fxQuote(@RequestBody FxQuoteRequest req) {
+        return fx.quote(req.userId(), req.sourceAccountId(), req.currency(), req.amountRub(), req.receiveAmount());
+    }
+
+    public record FxQuoteRequest(UUID userId, UUID sourceAccountId, String currency, java.math.BigDecimal amountRub,
+                                 java.math.BigDecimal receiveAmount) {
     }
 
     @PostMapping("/commission")
