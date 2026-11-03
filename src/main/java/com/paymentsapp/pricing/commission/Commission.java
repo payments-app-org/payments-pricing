@@ -8,8 +8,12 @@ import java.util.UUID;
 public record Commission(
         OperationType operationType,
         Subscription subscription,
+        Party sourceType,
+        Party destinationType,
         BigDecimal amount,
         BigDecimal percent,
+        BigDecimal minFee,
+        BigDecimal fixedFee,
         BigDecimal commission,
         BigDecimal total,
         int tariffId,

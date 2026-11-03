@@ -8,7 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
-// REST-клиент сервиса account: подписка пользователя и проверка, что счёт списания — его
+// REST-клиент сервиса account: подписка и счета пользователя, принадлежность карты нашему банку
 @Component
 public class AccountClient {
 
@@ -18,23 +18,39 @@ public class AccountClient {
         this.restClient = builder.baseUrl(accountUrl).build();
     }
 
-    public Subscription getSubscription(UUID userId, UUID sourceAccountId) {
-        AccountUser user = restClient.get()
+    public AccountUser getUser(UUID userId) {
+        return restClient.get()
                 .uri("/api/users/{userId}", userId)
                 .retrieve()
                 .onStatus(status -> status.value() == HttpStatus.NOT_FOUND.value(), (req, res) -> {
                     throw new UserNotFoundException(userId);
                 })
                 .body(AccountUser.class);
-        if (user.accounts().stream().noneMatch(a -> a.id().equals(sourceAccountId))) {
-            throw new AccountNotOwnedException(sourceAccountId);
+    }
+
+    // Карта выпущена нашим банком (есть у нас в account)
+    public boolean isOurCard(String cardNumber) {
+        return restClient.get()
+                .uri("/api/internal/recipients?cardNumber={cardNumber}", cardNumber)
+                .retrieve()
+                .onStatus(status -> status.value() == HttpStatus.NOT_FOUND.value(), (req, res) -> {
+                })
+                .toBodilessEntity()
+                .getStatusCode().is2xxSuccessful();
+    }
+
+    public record AccountUser(UUID id, Subscription subscription, List<AccountRef> accounts) {
+
+        public AccountRef account(UUID accountId) {
+            return accounts.stream().filter(a -> a.id().equals(accountId)).findFirst()
+                    .orElseThrow(() -> new AccountNotOwnedException(accountId));
         }
-        return user.subscription();
     }
 
-    record AccountUser(UUID id, Subscription subscription, List<AccountRef> accounts) {
-    }
+    public record AccountRef(UUID id, String type) {
 
-    record AccountRef(UUID id) {
+        public boolean isWallet() {
+            return "WALLET".equals(type);
+        }
     }
 }

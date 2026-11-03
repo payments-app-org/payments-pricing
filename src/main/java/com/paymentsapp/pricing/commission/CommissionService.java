@@ -1,13 +1,17 @@
 package com.paymentsapp.pricing.commission;
 
 import com.paymentsapp.pricing.account.AccountClient;
+import com.paymentsapp.pricing.account.AccountClient.AccountUser;
 import com.paymentsapp.pricing.quote.Quote;
 import com.paymentsapp.pricing.quote.QuoteSigner;
 import java.math.BigDecimal;
-import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.HexFormat;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -15,7 +19,6 @@ import org.springframework.stereotype.Service;
 @Service
 public class CommissionService {
 
-    private static final BigDecimal HUNDRED = BigDecimal.valueOf(100);
     // Сколько живёт котировка: за это время пользователь должен нажать «Перевести»
     static final Duration QUOTE_TTL = Duration.ofMinutes(10);
 
@@ -36,16 +39,51 @@ public class CommissionService {
         this.clock = clock;
     }
 
-    public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount) {
-        Subscription subscription = accountClient.getSubscription(userId, sourceAccountId);
-        CommissionRule rule = rules.findByOperationTypeAndSubscription(operationType, subscription)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Нет правила комиссии для " + operationType + " / " + subscription));
+    // recipientCardNumber — для перевода по карте, destinationAccountId — для перевода между своими счетами
+    public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount,
+                                String recipientCardNumber, UUID destinationAccountId) {
+        AccountUser user = accountClient.getUser(userId);
+        Party source = user.account(sourceAccountId).isWallet() ? Party.WALLET : Party.OUR_CARD;
 
-        BigDecimal commission = amount.multiply(rule.getPercent()).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-        Quote quote = new Quote(UUID.randomUUID(), userId, sourceAccountId, operationType.name(), amount, commission,
-                rule.getId(), Instant.now(clock).plus(QUOTE_TTL));
-        return new Commission(operationType, subscription, amount, rule.getPercent(), commission,
-                amount.add(commission), rule.getId(), quote.quoteId(), quote.expiresAt(), signer.sign(quote));
+        String recipientKey = null;
+        Party destination = switch (operationType) {
+            case SBP_PHONE -> Party.SBP;
+            case ABROAD -> Party.ABROAD;
+            case QR -> Party.QR;
+            case CARD2CARD -> {
+                if (recipientCardNumber == null) {
+                    throw new IllegalArgumentException("Не указан номер карты получателя");
+                }
+                recipientKey = recipientCardNumber;
+                yield accountClient.isOurCard(recipientCardNumber) ? Party.OUR_CARD : Party.OTHER_BANK_CARD;
+            }
+            case OWN_TRANSFER -> {
+                if (destinationAccountId == null) {
+                    throw new IllegalArgumentException("Не выбран счёт зачисления");
+                }
+                recipientKey = destinationAccountId.toString();
+                yield user.account(destinationAccountId).isWallet() ? Party.WALLET : Party.OUR_CARD;
+            }
+        };
+
+        CommissionRule rule = rules.findByOperationTypeAndSourceTypeAndDestinationTypeAndSubscription(
+                        operationType, source, destination, user.subscription())
+                .orElseThrow(() -> new OperationNotAvailableException("Такой перевод недоступен"));
+
+        BigDecimal commission = rule.commissionFor(amount);
+        Quote quote = new Quote(UUID.randomUUID(), userId, sourceAccountId, operationType.name(), destination.name(),
+                recipientKey == null ? null : sha256(recipientKey), amount, commission, rule.getId(),
+                Instant.now(clock).plus(QUOTE_TTL));
+        return new Commission(operationType, user.subscription(), source, destination, amount, rule.getPercent(),
+                rule.getMinFee(), rule.getFixedFee(), commission, amount.add(commission), rule.getId(), quote.quoteId(),
+                quote.expiresAt(), signer.sign(quote));
+    }
+
+    static String sha256(String value) {
+        try {
+            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

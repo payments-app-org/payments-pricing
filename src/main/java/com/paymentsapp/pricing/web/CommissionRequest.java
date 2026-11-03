@@ -11,6 +11,10 @@ public record CommissionRequest(
         @NotNull UUID userId,
         @NotNull UUID sourceAccountId,
         @NotNull OperationType operationType,
-        @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount
+        @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount,
+        // Для CARD2CARD — номер карты получателя (наша карта или чужая — разные тарифы)
+        String recipientCardNumber,
+        // Для OWN_TRANSFER — свой счёт зачисления
+        UUID destinationAccountId
 ) {
 }
