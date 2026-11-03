@@ -20,6 +20,7 @@ public class CommissionController {
 
     @PostMapping("/commission")
     public Commission calculate(@Valid @RequestBody CommissionRequest request) {
-        return commissionService.calculate(request.userId(), request.operationType(), request.amount());
+        return commissionService.calculate(request.userId(), request.sourceAccountId(), request.operationType(),
+                request.amount());
     }
 }

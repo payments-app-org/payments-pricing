@@ -1,7 +1,7 @@
 package com.paymentsapp.pricing.commission;
 
 public enum OperationType {
-    PHONE_TRANSFER,
-    CARD_TRANSFER,
+    SBP_PHONE,
+    CARD2CARD,
     OWN_TRANSFER
 }

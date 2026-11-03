@@ -9,6 +9,7 @@ import java.util.UUID;
 
 public record CommissionRequest(
         @NotNull UUID userId,
+        @NotNull UUID sourceAccountId,
         @NotNull OperationType operationType,
         @NotNull @Positive @Digits(integer = 15, fraction = 2) BigDecimal amount
 ) {

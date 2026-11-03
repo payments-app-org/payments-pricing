@@ -8,10 +8,14 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/payments}
     username: ${DB_USER:payments}
     password: ${DB_PASSWORD:payments}
-  # У каждого сервиса своя схема в общей базе
-  flyway:
-    schemas: pricing
+    # search_path соединения — своя схема, в том числе для нативных SQL-запросов
+    hikari:
+      schema: pricing
+  # У каждого сервиса своя схема в общей базе (создаётся в infra/postgres/init.sql)
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
     default-schema: pricing
+    liquibase-schema: pricing
   jpa:
     open-in-view: false
     hibernate:
@@ -21,3 +25,7 @@ spring:
 
 account:
   url: ${ACCOUNT_URL:http://localhost:8081}
+
+# Общий с payment секрет для подписи котировок
+quote:
+  secret: ${QUOTE_SECRET:local-dev-quote-secret-change-me}

@@ -1,5 +1,6 @@
 package com.paymentsapp.pricing.web;
 
+import com.paymentsapp.pricing.account.AccountNotOwnedException;
 import com.paymentsapp.pricing.account.UserNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -13,6 +14,11 @@ public class ErrorHandler {
     @ExceptionHandler(UserNotFoundException.class)
     ProblemDetail userNotFound(UserNotFoundException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(AccountNotOwnedException.class)
+    ProblemDetail accountNotOwned(AccountNotOwnedException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, e.getMessage());
     }
 
     // Сервис account недоступен или ответил ошибкой

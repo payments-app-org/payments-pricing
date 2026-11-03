@@ -7,6 +7,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 
+// Тариф: процент комиссии для пары «вид операции × подписка»
 @Entity
 @Table(name = "commission_rules")
 public class CommissionRule {
@@ -25,12 +26,14 @@ public class CommissionRule {
     protected CommissionRule() {
     }
 
-    public CommissionRule(OperationType operationType, Subscription subscription, BigDecimal percent) {
+    public CommissionRule(Integer id, OperationType operationType, Subscription subscription, BigDecimal percent) {
+        this.id = id;
         this.operationType = operationType;
         this.subscription = subscription;
         this.percent = percent;
     }
 
+    public Integer getId() { return id; }
     public OperationType getOperationType() { return operationType; }
     public Subscription getSubscription() { return subscription; }
     public BigDecimal getPercent() { return percent; }
