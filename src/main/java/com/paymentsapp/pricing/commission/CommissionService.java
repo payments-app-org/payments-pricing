@@ -65,10 +65,7 @@ public class CommissionService {
                 }
                 recipientKey = destinationAccountId.toString();
                 AccountClient.AccountRef target = user.account(destinationAccountId);
-                if (target.isExternal()) {
-                    throw new OperationNotAvailableException("Зачислить на карту другого банка отсюда нельзя");
-                }
-                yield target.isWallet() ? Party.WALLET : Party.OUR_CARD;
+                yield target.isWallet() ? Party.WALLET : target.isExternal() ? Party.OTHER_BANK_CARD : Party.OUR_CARD;
             }
         };
 

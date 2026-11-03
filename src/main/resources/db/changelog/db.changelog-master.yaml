@@ -8,3 +8,6 @@ databaseChangeLog:
   - include:
       file: changes/003-linked-card-tariffs.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/004-wallet-topup-free.sql
+      relativeToChangelogFile: true
