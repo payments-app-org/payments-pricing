@@ -23,5 +23,8 @@ public enum Party {
     TRAVEL,             // путешествия: билеты, туры
     INSURANCE,          // страхование
     SECURITY,           // охранные системы
-    DONATIONS           // пожертвования
+    DONATIONS,          // пожертвования
+    UTILITIES,          // услуги ЖКХ
+    INTERNET,           // интернет, ТВ и домашний телефон
+    MISC                // разное
 }
