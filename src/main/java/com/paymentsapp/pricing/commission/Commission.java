@@ -14,6 +14,11 @@ public record Commission(
         BigDecimal percent,
         BigDecimal minFee,
         BigDecimal fixedFee,
+        // Верхняя граница комиссии; null — нет
+        BigDecimal maxFee,
+        // Бесплатный лимит в месяц и сколько от него осталось до этой операции; null — лимита нет
+        BigDecimal freeMonthlyAmount,
+        BigDecimal freeMonthlyLeft,
         BigDecimal commission,
         BigDecimal total,
         int tariffId,

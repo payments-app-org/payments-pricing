@@ -100,12 +100,16 @@ public class CommissionService {
                         operationType, source, destination, user.subscription())
                 .orElseThrow(() -> new OperationNotAvailableException("Такой перевод недоступен"));
 
-        BigDecimal commission = rule.commissionFor(amount);
+        // Бесплатный лимит в месяц (переводы по СБП) — считаем от того, сколько уже переведено
+        BigDecimal used = rule.getFreeMonthlyAmount() == null ? BigDecimal.ZERO
+                : accountClient.monthUsage(userId, operationType.name());
+        BigDecimal commission = rule.commissionFor(amount, used);
+        BigDecimal freeLeft = rule.getFreeMonthlyAmount() == null ? null : rule.freeLeft(used);
         Quote quote = new Quote(UUID.randomUUID(), userId, sourceAccountId, operationType.name(), destination.name(),
                 recipientKey == null ? null : sha256(recipientKey), amount, commission, rule.getId(),
                 Instant.now(clock).plus(QUOTE_TTL));
         return new Commission(operationType, user.subscription(), source, destination, amount, rule.getPercent(),
-                rule.getMinFee(), rule.getFixedFee(), commission, amount.add(commission), rule.getId(), quote.quoteId(),
+                rule.getMinFee(), rule.getFixedFee(), rule.getMaxFee(), rule.getFreeMonthlyAmount(), freeLeft, commission, amount.add(commission), rule.getId(), quote.quoteId(),
                 quote.expiresAt(), signer.sign(quote));
     }
 

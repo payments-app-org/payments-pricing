@@ -9,7 +9,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 
 // Тариф: комиссия для «вид операции × откуда × куда × подписка».
-// Комиссия = max(сумма × percent / 100, minFee) + fixedFee
+// Комиссия = min(max(сумма × percent / 100, minFee) + fixedFee, maxFee).
+// freeMonthlyAmount — сколько в месяц можно без комиссии: комиссию берём только с превышения
 @Entity
 @Table(name = "commission_rules")
 public class CommissionRule {
@@ -34,6 +35,10 @@ public class CommissionRule {
     private BigDecimal percent;
     private BigDecimal minFee;
     private BigDecimal fixedFee;
+    // null — без верхней границы
+    private BigDecimal maxFee;
+    // null — бесплатного лимита нет
+    private BigDecimal freeMonthlyAmount;
     private String label;
     private int sortOrder;
 
@@ -53,9 +58,39 @@ public class CommissionRule {
         this.label = "";
     }
 
+    public CommissionRule(Integer id, OperationType operationType, Party sourceType, Party destinationType,
+                          Subscription subscription, BigDecimal percent, BigDecimal minFee, BigDecimal fixedFee,
+                          BigDecimal maxFee, BigDecimal freeMonthlyAmount) {
+        this(id, operationType, sourceType, destinationType, subscription, percent, minFee, fixedFee);
+        this.maxFee = maxFee;
+        this.freeMonthlyAmount = freeMonthlyAmount;
+    }
+
     public BigDecimal commissionFor(BigDecimal amount) {
-        BigDecimal byPercent = amount.multiply(percent).divide(HUNDRED, 2, RoundingMode.HALF_UP);
-        return byPercent.max(minFee).add(fixedFee).setScale(2, RoundingMode.HALF_UP);
+        return commissionFor(amount, BigDecimal.ZERO);
+    }
+
+    // usedThisMonth — сколько клиент уже перевёл этим видом операций с начала месяца
+    public BigDecimal commissionFor(BigDecimal amount, BigDecimal usedThisMonth) {
+        BigDecimal charged = amount.subtract(freeLeft(usedThisMonth)).max(BigDecimal.ZERO);
+        if (charged.signum() == 0) {
+            return BigDecimal.ZERO.setScale(2);
+        }
+        BigDecimal byPercent = charged.multiply(percent).divide(HUNDRED, 2, RoundingMode.HALF_UP);
+        BigDecimal fee = byPercent.max(minFee).add(fixedFee);
+        if (maxFee != null) {
+            fee = fee.min(maxFee);
+        }
+        return fee.setScale(2, RoundingMode.HALF_UP);
+    }
+
+    // Сколько ещё можно перевести без комиссии в этом месяце; без бесплатного лимита — 0
+    public BigDecimal freeLeft(BigDecimal usedThisMonth) {
+        if (freeMonthlyAmount == null) {
+            return BigDecimal.ZERO;
+        }
+        BigDecimal used = usedThisMonth == null ? BigDecimal.ZERO : usedThisMonth;
+        return freeMonthlyAmount.subtract(used).max(BigDecimal.ZERO);
     }
 
     public Integer getId() { return id; }
@@ -66,6 +101,8 @@ public class CommissionRule {
     public BigDecimal getPercent() { return percent; }
     public BigDecimal getMinFee() { return minFee; }
     public BigDecimal getFixedFee() { return fixedFee; }
+    public BigDecimal getMaxFee() { return maxFee; }
+    public BigDecimal getFreeMonthlyAmount() { return freeMonthlyAmount; }
     public String getLabel() { return label; }
     public int getSortOrder() { return sortOrder; }
 }

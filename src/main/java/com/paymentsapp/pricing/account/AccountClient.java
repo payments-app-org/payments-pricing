@@ -39,6 +39,18 @@ public class AccountClient {
                 .getStatusCode().is2xxSuccessful();
     }
 
+    // Сколько клиент потратил на операции этого вида с начала месяца
+    public java.math.BigDecimal monthUsage(UUID userId, String operationType) {
+        OperationUsage usage = restClient.get()
+                .uri("/api/users/{userId}/operation-usage?operationType={op}", userId, operationType)
+                .retrieve()
+                .body(OperationUsage.class);
+        return usage == null || usage.month() == null ? java.math.BigDecimal.ZERO : usage.month();
+    }
+
+    record OperationUsage(String operationType, java.math.BigDecimal month) {
+    }
+
     public record AccountUser(UUID id, Subscription subscription, List<AccountRef> accounts) {
 
         public AccountRef account(UUID accountId) {

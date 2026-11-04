@@ -49,11 +49,11 @@ public class TariffService {
     }
 
     public record Row(String label, Party sourceType, Party destinationType, BigDecimal percent, BigDecimal minFee,
-                      BigDecimal fixedFee) {
+                      BigDecimal fixedFee, BigDecimal maxFee, BigDecimal freeMonthlyAmount) {
 
         static Row of(CommissionRule r) {
             return new Row(r.getLabel(), r.getSourceType(), r.getDestinationType(), r.getPercent(), r.getMinFee(),
-                    r.getFixedFee());
+                    r.getFixedFee(), r.getMaxFee(), r.getFreeMonthlyAmount());
         }
     }
 }

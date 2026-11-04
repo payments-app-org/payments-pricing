@@ -77,9 +77,9 @@ class CommissionServiceTest {
 
     @Test
     void cardTransferTariffDependsOnWhetherCardIsOurs() {
-        givenUser(Subscription.PREMIUM);
-        givenRule(3, OperationType.CARD2CARD, Party.OUR_CARD, Party.OUR_CARD, Subscription.PREMIUM, "0.50", "0", "0");
-        givenRule(4, OperationType.CARD2CARD, Party.OUR_CARD, Party.OTHER_BANK_CARD, Subscription.PREMIUM, "1.50", "30", "0");
+        givenUser(Subscription.MTS_PREMIUM);
+        givenRule(3, OperationType.CARD2CARD, Party.OUR_CARD, Party.OUR_CARD, Subscription.MTS_PREMIUM, "0.50", "0", "0");
+        givenRule(4, OperationType.CARD2CARD, Party.OUR_CARD, Party.OTHER_BANK_CARD, Subscription.MTS_PREMIUM, "1.50", "30", "0");
 
         Commission ours = service.calculate(userId, cardId, OperationType.CARD2CARD, new BigDecimal("10000"), OUR_CARD, null);
         Commission foreign = service.calculate(userId, cardId, OperationType.CARD2CARD, new BigDecimal("10000"), FOREIGN_CARD, null);
@@ -112,5 +112,31 @@ class CommissionServiceTest {
 
         assertThatThrownBy(() -> service.calculate(userId, cardId, OperationType.SBP_PHONE, BigDecimal.TEN, null, null))
                 .isInstanceOf(OperationNotAvailableException.class);
+    }
+
+    @Test
+    void sbpIsFreeWithinMonthlyLimitAndChargedOnlyOnExcess() {
+        givenUser(Subscription.NONE);
+        when(rules.findByOperationTypeAndSourceTypeAndDestinationTypeAndSubscription(
+                OperationType.SBP_PHONE, Party.OUR_CARD, Party.SBP, Subscription.NONE))
+                .thenReturn(Optional.of(new CommissionRule(6, OperationType.SBP_PHONE, Party.OUR_CARD, Party.SBP,
+                        Subscription.NONE, new BigDecimal("0.50"), BigDecimal.ZERO, BigDecimal.ZERO,
+                        new BigDecimal("1500"), new BigDecimal("100000"))));
+
+        // Перевели 90 000: ещё 10 000 бесплатно, 0,5% — с 20 000 превышения
+        when(accountClient.monthUsage(userId, "SBP_PHONE")).thenReturn(new BigDecimal("90000"));
+        Commission partly = service.calculate(userId, cardId, OperationType.SBP_PHONE, new BigDecimal("30000"), null, null);
+        assertThat(partly.commission()).isEqualByComparingTo("100.00");
+        assertThat(partly.freeMonthlyLeft()).isEqualByComparingTo("10000");
+
+        // Лимит исчерпан: 0,5% от 1 000 000 = 5 000, но не больше 1 500
+        when(accountClient.monthUsage(userId, "SBP_PHONE")).thenReturn(new BigDecimal("100000"));
+        Commission capped = service.calculate(userId, cardId, OperationType.SBP_PHONE, new BigDecimal("1000000"), null, null);
+        assertThat(capped.commission()).isEqualByComparingTo("1500.00");
+
+        // В пределах лимита — бесплатно
+        when(accountClient.monthUsage(userId, "SBP_PHONE")).thenReturn(BigDecimal.ZERO);
+        Commission free = service.calculate(userId, cardId, OperationType.SBP_PHONE, new BigDecimal("50000"), null, null);
+        assertThat(free.commission()).isEqualByComparingTo("0");
     }
 }
