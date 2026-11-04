@@ -38,3 +38,6 @@ databaseChangeLog:
   - include:
       file: changes/013-real-tariffs.sql
       relativeToChangelogFile: true
+  - include:
+      file: changes/014-tariffs-document.sql
+      relativeToChangelogFile: true

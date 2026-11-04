@@ -77,9 +77,9 @@ class CommissionServiceTest {
 
     @Test
     void cardTransferTariffDependsOnWhetherCardIsOurs() {
-        givenUser(Subscription.MTS_PREMIUM);
-        givenRule(3, OperationType.CARD2CARD, Party.OUR_CARD, Party.OUR_CARD, Subscription.MTS_PREMIUM, "0.50", "0", "0");
-        givenRule(4, OperationType.CARD2CARD, Party.OUR_CARD, Party.OTHER_BANK_CARD, Subscription.MTS_PREMIUM, "1.50", "30", "0");
+        givenUser(Subscription.PREMIUM);
+        givenRule(3, OperationType.CARD2CARD, Party.OUR_CARD, Party.OUR_CARD, Subscription.PREMIUM, "0.50", "0", "0");
+        givenRule(4, OperationType.CARD2CARD, Party.OUR_CARD, Party.OTHER_BANK_CARD, Subscription.PREMIUM, "1.50", "30", "0");
 
         Commission ours = service.calculate(userId, cardId, OperationType.CARD2CARD, new BigDecimal("10000"), OUR_CARD, null);
         Commission foreign = service.calculate(userId, cardId, OperationType.CARD2CARD, new BigDecimal("10000"), FOREIGN_CARD, null);
