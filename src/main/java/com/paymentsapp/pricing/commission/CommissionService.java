@@ -56,6 +56,7 @@ public class CommissionService {
             case REQUISITES -> Party.LEGAL_ENTITY;
             case REQUISITES_OUR -> Party.OUR_LEGAL_ENTITY;
             case UIN_PAYMENT -> Party.GOV;
+            case MOBILE_PAYMENT -> Party.MOBILE;
             case CARD2CARD -> {
                 if (recipientCardNumber == null) {
                     throw new IllegalArgumentException("Не указан номер карты получателя");

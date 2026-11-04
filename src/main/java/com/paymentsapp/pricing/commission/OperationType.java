@@ -12,5 +12,7 @@ public enum OperationType {
     REQUISITES,
     REQUISITES_OUR,
     // Госуслуги по УИН
-    UIN_PAYMENT
+    UIN_PAYMENT,
+    // Мобильная связь любого оператора
+    MOBILE_PAYMENT
 }
