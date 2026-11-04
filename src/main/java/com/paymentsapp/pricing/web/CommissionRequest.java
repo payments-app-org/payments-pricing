@@ -15,6 +15,8 @@ public record CommissionRequest(
         // Для CARD2CARD — номер карты получателя (наша карта или чужая — разные тарифы)
         String recipientCardNumber,
         // Для OWN_TRANSFER — свой счёт зачисления
-        UUID destinationAccountId
+        UUID destinationAccountId,
+        // Для BILL — код поставщика в biller
+        String providerCode
 ) {
 }

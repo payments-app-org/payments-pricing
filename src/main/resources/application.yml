@@ -29,3 +29,6 @@ account:
 # Общий с payment секрет для подписи котировок
 quote:
   secret: ${QUOTE_SECRET:local-dev-quote-secret-change-me}
+
+biller:
+  url: ${BILLER_URL:http://localhost:8087}

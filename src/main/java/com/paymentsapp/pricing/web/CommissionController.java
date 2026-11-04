@@ -48,7 +48,7 @@ public class CommissionController {
     @PostMapping("/commission")
     public Commission calculate(@Valid @RequestBody CommissionRequest request) {
         return commissionService.calculate(request.userId(), request.sourceAccountId(), request.operationType(),
-                request.amount(), request.recipientCardNumber(), request.destinationAccountId());
+                request.amount(), request.recipientCardNumber(), request.destinationAccountId(), request.providerCode());
     }
 
     // Комиссии для экрана «Лимиты и условия счёта» — по подписке пользователя.

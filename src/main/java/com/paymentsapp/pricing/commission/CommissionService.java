@@ -23,17 +23,25 @@ public class CommissionService {
     static final Duration QUOTE_TTL = Duration.ofMinutes(10);
 
     private final AccountClient accountClient;
+    private final com.paymentsapp.pricing.biller.BillerClient billerClient;
     private final CommissionRuleRepository rules;
     private final QuoteSigner signer;
     private final Clock clock;
 
     @Autowired
-    public CommissionService(AccountClient accountClient, CommissionRuleRepository rules, QuoteSigner signer) {
-        this(accountClient, rules, signer, Clock.systemUTC());
+    public CommissionService(AccountClient accountClient, com.paymentsapp.pricing.biller.BillerClient billerClient,
+                             CommissionRuleRepository rules, QuoteSigner signer) {
+        this(accountClient, billerClient, rules, signer, Clock.systemUTC());
     }
 
     CommissionService(AccountClient accountClient, CommissionRuleRepository rules, QuoteSigner signer, Clock clock) {
+        this(accountClient, null, rules, signer, clock);
+    }
+
+    CommissionService(AccountClient accountClient, com.paymentsapp.pricing.biller.BillerClient billerClient,
+                      CommissionRuleRepository rules, QuoteSigner signer, Clock clock) {
         this.accountClient = accountClient;
+        this.billerClient = billerClient;
         this.rules = rules;
         this.signer = signer;
         this.clock = clock;
@@ -42,6 +50,12 @@ public class CommissionService {
     // recipientCardNumber — для перевода по карте, destinationAccountId — для перевода между своими счетами
     public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount,
                                 String recipientCardNumber, UUID destinationAccountId) {
+        return calculate(userId, sourceAccountId, operationType, amount, recipientCardNumber, destinationAccountId, null);
+    }
+
+    // providerCode — для оплаты поставщику (BILL): тариф по группе поставщика из biller
+    public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount,
+                                String recipientCardNumber, UUID destinationAccountId, String providerCode) {
         AccountUser user = accountClient.getUser(userId);
         AccountClient.AccountRef sourceAccount = user.account(sourceAccountId);
         Party source = sourceAccount.isWallet() ? Party.WALLET
@@ -55,8 +69,15 @@ public class CommissionService {
             case WALLET_TRANSFER -> Party.WALLET;
             case REQUISITES -> Party.LEGAL_ENTITY;
             case REQUISITES_OUR -> Party.OUR_LEGAL_ENTITY;
-            case UIN_PAYMENT -> Party.GOV;
-            case MOBILE_PAYMENT -> Party.MOBILE;
+            case BILL -> {
+                if (providerCode == null || providerCode.isBlank()) {
+                    throw new IllegalArgumentException("Не выбран поставщик");
+                }
+                recipientKey = providerCode;
+                String group = billerClient.providerGroup(providerCode)
+                        .orElseThrow(() -> new OperationNotAvailableException("Поставщик не найден"));
+                yield Party.valueOf(group);
+            }
             case CARD2CARD -> {
                 if (recipientCardNumber == null) {
                     throw new IllegalArgumentException("Не указан номер карты получателя");
