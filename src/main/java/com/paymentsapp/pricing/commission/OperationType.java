@@ -5,5 +5,12 @@ public enum OperationType {
     CARD2CARD,
     OWN_TRANSFER,
     ABROAD,
-    QR
+    QR,
+    // На «Мой кошелёк» другого клиента по номеру телефона
+    WALLET_TRANSFER,
+    // По реквизитам юрлицу: в другой банк / на счёт в нашем банке
+    REQUISITES,
+    REQUISITES_OUR,
+    // Госуслуги по УИН
+    UIN_PAYMENT
 }

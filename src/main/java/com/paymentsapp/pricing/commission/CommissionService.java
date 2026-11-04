@@ -52,6 +52,10 @@ public class CommissionService {
             case SBP_PHONE -> Party.SBP;
             case ABROAD -> Party.ABROAD;
             case QR -> Party.QR;
+            case WALLET_TRANSFER -> Party.WALLET;
+            case REQUISITES -> Party.LEGAL_ENTITY;
+            case REQUISITES_OUR -> Party.OUR_LEGAL_ENTITY;
+            case UIN_PAYMENT -> Party.GOV;
             case CARD2CARD -> {
                 if (recipientCardNumber == null) {
                     throw new IllegalArgumentException("Не указан номер карты получателя");
