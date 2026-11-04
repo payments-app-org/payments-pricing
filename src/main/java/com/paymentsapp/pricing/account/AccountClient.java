@@ -55,7 +55,12 @@ public class AccountClient {
 
         // Привязанная карта другого банка
         public boolean isExternal() {
-            return "EXTERNAL_CARD".equals(type);
+            return "EXTERNAL_CARD".equals(type) || isSbpSource();
+        }
+
+        // Свой счёт в другом банке: пополнение по СБП (me2me)
+        public boolean isSbpSource() {
+            return "EXTERNAL_SBP".equals(type);
         }
     }
 }

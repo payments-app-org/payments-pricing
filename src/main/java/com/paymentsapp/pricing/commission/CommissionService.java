@@ -59,6 +59,7 @@ public class CommissionService {
         AccountUser user = accountClient.getUser(userId);
         AccountClient.AccountRef sourceAccount = user.account(sourceAccountId);
         Party source = sourceAccount.isWallet() ? Party.WALLET
+                : sourceAccount.isSbpSource() ? Party.SBP
                 : sourceAccount.isExternal() ? Party.OTHER_BANK_CARD : Party.OUR_CARD;
 
         String recipientKey = null;
