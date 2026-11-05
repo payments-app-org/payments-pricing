@@ -46,12 +46,6 @@ spring:
       ddl-auto: validate
     properties:
       hibernate.default_schema: pricing
-      # Кэш второго уровня: тарифы и курсы (меняются только миграциями)
-      hibernate.cache.use_second_level_cache: true
-      hibernate.cache.use_query_cache: true
-      hibernate.cache.region.factory_class: jcache
-      hibernate.javax.cache.provider: com.github.benmanes.caffeine.jcache.spi.CaffeineCachingProvider
-      hibernate.javax.cache.missing_cache_strategy: create
 
 # Общий с payment секрет для подписи котировок
 quote:

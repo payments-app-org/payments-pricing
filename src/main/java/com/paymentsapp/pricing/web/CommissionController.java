@@ -9,6 +9,10 @@ import com.paymentsapp.pricing.commission.TariffService;
 import com.paymentsapp.pricing.fx.FxQuote;
 import com.paymentsapp.pricing.fx.FxService;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Positive;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
@@ -38,12 +42,15 @@ public class CommissionController {
 
     // Перевод за рубеж: пересчёт по курсу в обе стороны — по сумме списания или по сумме к получению
     @PostMapping("/fx-quote")
-    public FxQuote fxQuote(@RequestBody FxQuoteRequest req) {
+    public FxQuote fxQuote(@Valid @RequestBody FxQuoteRequest req) {
         return fx.quote(req.userId(), req.sourceAccountId(), req.currency(), req.amountRub(), req.receiveAmount());
     }
 
-    public record FxQuoteRequest(UUID userId, UUID sourceAccountId, String currency, BigDecimal amountRub,
-                                 BigDecimal receiveAmount) {
+    // Сумма — в рублях (amountRub) или к получению (receiveAmount); что из них задано, проверяет FxService
+    public record FxQuoteRequest(@NotNull UUID userId, @NotNull UUID sourceAccountId,
+                                 @NotNull @Pattern(regexp = "[A-Z]{3}", message = "код валюты — три заглавные латинские буквы") String currency,
+                                 @Positive @Digits(integer = 15, fraction = 2) BigDecimal amountRub,
+                                 @Positive @Digits(integer = 15, fraction = 2) BigDecimal receiveAmount) {
     }
 
     @PostMapping("/commission")

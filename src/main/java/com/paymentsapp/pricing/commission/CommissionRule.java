@@ -1,6 +1,5 @@
 package com.paymentsapp.pricing.commission;
 
-import jakarta.persistence.Cacheable;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -8,18 +7,14 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import org.hibernate.annotations.Cache;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
 import org.hibernate.annotations.Immutable;
 
 // Тариф: комиссия для «вид операции × откуда × куда × подписка».
 // Комиссия = min(max(сумма × percent / 100, minFee) + fixedFee, maxFee).
 // freeMonthlyAmount — сколько в месяц можно без комиссии: комиссию берём только с превышения
-// Справочник меняется только миграциями — кэш Hibernate второго уровня
+// Справочник меняется только миграциями (поэтому @Immutable: Hibernate не следит за изменениями)
 @Entity
 @Immutable
-@Cacheable
-@Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
 @Table(name = "commission_rules")
 public class CommissionRule {
 
