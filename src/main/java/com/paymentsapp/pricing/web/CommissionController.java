@@ -9,6 +9,7 @@ import com.paymentsapp.pricing.commission.TariffService;
 import com.paymentsapp.pricing.fx.FxQuote;
 import com.paymentsapp.pricing.fx.FxService;
 import jakarta.validation.Valid;
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -41,8 +42,8 @@ public class CommissionController {
         return fx.quote(req.userId(), req.sourceAccountId(), req.currency(), req.amountRub(), req.receiveAmount());
     }
 
-    public record FxQuoteRequest(UUID userId, UUID sourceAccountId, String currency, java.math.BigDecimal amountRub,
-                                 java.math.BigDecimal receiveAmount) {
+    public record FxQuoteRequest(UUID userId, UUID sourceAccountId, String currency, BigDecimal amountRub,
+                                 BigDecimal receiveAmount) {
     }
 
     @PostMapping("/commission")

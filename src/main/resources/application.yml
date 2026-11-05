@@ -9,6 +9,22 @@ spring:
     clients:
       connect-timeout: ${HTTP_CONNECT_TIMEOUT:1s}
       read-timeout: ${HTTP_READ_TIMEOUT:5s}
+    serviceclient:
+      account:
+        base-url: ${ACCOUNT_URL:http://localhost:8081}
+        connect-timeout: 1s
+        read-timeout: 2s
+      biller:
+        base-url: ${BILLER_URL:http://localhost:8087}
+        connect-timeout: 1s
+        read-timeout: 2s
+  # Redis: кэш профиля и групп поставщиков
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      repositories:
+        enabled: false
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/payments}
     username: ${DB_USER:payments}
@@ -27,14 +43,66 @@ spring:
       ddl-auto: validate
     properties:
       hibernate.default_schema: pricing
-
-account:
-  url: ${ACCOUNT_URL:http://localhost:8081}
+      # Кэш второго уровня: тарифы и курсы (меняются только миграциями)
+      hibernate.cache.use_second_level_cache: true
+      hibernate.cache.use_query_cache: true
+      hibernate.cache.region.factory_class: jcache
+      hibernate.javax.cache.provider: com.github.benmanes.caffeine.jcache.spi.CaffeineCachingProvider
+      hibernate.javax.cache.missing_cache_strategy: create
 
 # Общий с payment секрет для подписи котировок
 quote:
   # Только из окружения: значения по умолчанию у секрета нет
   secret: ${QUOTE_SECRET}
+  # Сколько живёт котировка
+  ttl: 10m
 
-biller:
-  url: ${BILLER_URL:http://localhost:8087}
+# Общая библиотека libs/platform
+platform:
+  time:
+    zone: Europe/Moscow
+  cache:
+    enabled: true
+    version: v1
+    ttl:
+      # Профиль: подписка и счета — коротко, чтобы новая подписка или карта появились быстро
+      account-user: 30s
+      provider-group: 1h
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
+        record-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+    instances:
+      account: { base-config: default }
+      biller: { base-config: default }
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 100ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - org.springframework.web.client.ResourceAccessException
+          - org.springframework.web.client.HttpServerErrorException
+    instances:
+      account: { base-config: default }
+      biller: { base-config: default }
+  bulkhead:
+    configs:
+      default:
+        max-concurrent-calls: 100
+        max-wait-duration: 50ms
+    instances:
+      account: { base-config: default }
+      biller: { base-config: default }

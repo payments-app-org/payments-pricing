@@ -1,78 +1,114 @@
 package com.paymentsapp.pricing.account;
 
-import com.paymentsapp.pricing.commission.Subscription;
-import java.util.List;
-import java.util.UUID;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.HttpStatus;
-import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
+import static com.paymentsapp.pricing.error.PricingError.*;
 
-// REST-клиент сервиса account: подписка и счета пользователя, принадлежность карты нашему банку
+import com.paymentsapp.platform.error.DomainException;
+import com.paymentsapp.platform.resilience.ResilientCalls;
+import com.paymentsapp.pricing.client.AccountApi;
+import com.paymentsapp.pricing.client.Backends;
+import com.paymentsapp.pricing.commission.Subscription;
+import java.io.Serializable;
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Supplier;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClientException;
+
+// account: подписка и счета пользователя (из кэша), чья карта получателя, сколько потрачено на вид операции за месяц.
+// Сбой account → PricingError.ACCOUNT_UNAVAILABLE.
 @Component
 public class AccountClient {
 
-    private final RestClient restClient;
+    private final AccountDirectory directory;
+    private final AccountApi api;
+    private final ResilientCalls calls;
 
-    public AccountClient(RestClient.Builder builder, @Value("${account.url}") String accountUrl) {
-        this.restClient = builder.baseUrl(accountUrl).build();
+    AccountClient(AccountDirectory directory, AccountApi api, ResilientCalls calls) {
+        this.directory = directory;
+        this.api = api;
+        this.calls = calls;
     }
 
     public AccountUser getUser(UUID userId) {
-        return restClient.get()
-                .uri("/api/users/{userId}", userId)
-                .retrieve()
-                .onStatus(status -> status.value() == HttpStatus.NOT_FOUND.value(), (req, res) -> {
-                    throw new UserNotFoundException(userId);
-                })
-                .body(AccountUser.class);
+        return unavailableAsDomain(() -> directory.user(userId));
     }
 
-    // Карта выпущена нашим банком (есть у нас в account)
+    // Профиль, в котором точно есть этот счёт: в кэше его может ещё не быть (карту только что привязали)
+    public AccountUser getUserWithAccount(UUID userId, UUID accountId) {
+        AccountUser cached = getUser(userId);
+        if (cached.find(accountId).isPresent()) {
+            return cached;
+        }
+        AccountUser fresh = unavailableAsDomain(() -> directory.fresh(userId));
+        fresh.account(accountId);
+        return fresh;
+    }
+
+    // Карта выпущена нашим банком (есть у нас в account). Номер карты в кэш не кладём.
     public boolean isOurCard(String cardNumber) {
-        return restClient.get()
-                .uri("/api/internal/recipients?cardNumber={cardNumber}", cardNumber)
-                .retrieve()
-                .onStatus(status -> status.value() == HttpStatus.NOT_FOUND.value(), (req, res) -> {
-                })
-                .toBodilessEntity()
-                .getStatusCode().is2xxSuccessful();
+        return unavailableAsDomain(() -> calls.call(Backends.ACCOUNT, () -> {
+            try {
+                api.recipientByCard(cardNumber);
+                return true;
+            } catch (HttpClientErrorException.NotFound e) {
+                return false;
+            }
+        }));
     }
 
     // Сколько клиент потратил на операции этого вида с начала месяца
-    public java.math.BigDecimal monthUsage(UUID userId, String operationType) {
-        OperationUsage usage = restClient.get()
-                .uri("/api/users/{userId}/operation-usage?operationType={op}", userId, operationType)
-                .retrieve()
-                .body(OperationUsage.class);
-        return usage == null || usage.month() == null ? java.math.BigDecimal.ZERO : usage.month();
+    public BigDecimal monthUsage(UUID userId, String operationType) {
+        AccountApi.OperationUsage usage = unavailableAsDomain(() -> calls.call(Backends.ACCOUNT,
+                () -> api.operationUsage(userId, operationType)));
+        return usage == null || usage.month() == null ? BigDecimal.ZERO : usage.month();
     }
 
-    record OperationUsage(String operationType, java.math.BigDecimal month) {
+    private static <T> T unavailableAsDomain(Supplier<T> call) {
+        try {
+            return call.get();
+        } catch (HttpClientErrorException.NotFound e) {
+            throw new DomainException(USER_NOT_FOUND);
+        } catch (RestClientException e) {
+            throw DomainException.withCause(ACCOUNT_UNAVAILABLE, e);
+        }
     }
 
-    public record AccountUser(UUID id, Subscription subscription, List<AccountRef> accounts) {
+    // Serializable — лежит в кэше Redis
+    public record AccountUser(UUID id, Subscription subscription, List<AccountRef> accounts) implements Serializable {
 
         public AccountRef account(UUID accountId) {
-            return accounts.stream().filter(a -> a.id().equals(accountId)).findFirst()
-                    .orElseThrow(() -> new AccountNotOwnedException(accountId));
+            return find(accountId).orElseThrow(() -> new DomainException(ACCOUNT_NOT_OWNED));
+        }
+
+        Optional<AccountRef> find(UUID accountId) {
+            return accounts.stream().filter(a -> a.id().equals(accountId)).findFirst();
         }
     }
 
-    public record AccountRef(UUID id, String type) {
+    public record AccountRef(UUID id, AccountKind type) implements Serializable {
 
         public boolean isWallet() {
-            return "WALLET".equals(type);
+            return type == AccountKind.WALLET;
         }
 
-        // Привязанная карта другого банка
+        // Привязанная карта или свой счёт в другом банке
         public boolean isExternal() {
-            return "EXTERNAL_CARD".equals(type) || isSbpSource();
+            return type == AccountKind.EXTERNAL_CARD || isSbpSource();
         }
 
         // Свой счёт в другом банке: пополнение по СБП (me2me)
         public boolean isSbpSource() {
-            return "EXTERNAL_SBP".equals(type);
+            return type == AccountKind.EXTERNAL_SBP;
         }
+    }
+
+    public enum AccountKind {
+        WALLET,
+        CARD,
+        EXTERNAL_CARD,
+        EXTERNAL_SBP
     }
 }

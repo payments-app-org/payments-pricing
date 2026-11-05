@@ -1,13 +1,21 @@
 package com.paymentsapp.pricing.fx;
 
+import jakarta.persistence.Cacheable;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
+import org.hibernate.annotations.Cache;
+import org.hibernate.annotations.CacheConcurrencyStrategy;
+import org.hibernate.annotations.Immutable;
 
 // Курс валюты: sell_rate считает сама база из курса ЦБ и наценки
+// Справочник меняется только миграциями — кэш Hibernate второго уровня
 @Entity
+@Immutable
+@Cacheable
+@Cache(usage = CacheConcurrencyStrategy.READ_ONLY)
 @Table(name = "exchange_rates")
 public class ExchangeRate {
 

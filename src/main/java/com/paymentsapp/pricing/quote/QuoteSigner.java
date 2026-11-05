@@ -5,7 +5,6 @@ import java.security.GeneralSecurityException;
 import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -18,9 +17,9 @@ public class QuoteSigner {
     private final JsonMapper json;
     private final byte[] secret;
 
-    public QuoteSigner(JsonMapper json, @Value("${quote.secret}") String secret) {
+    public QuoteSigner(JsonMapper json, QuoteProperties properties) {
         this.json = json;
-        this.secret = secret.getBytes(StandardCharsets.UTF_8);
+        this.secret = properties.secret().getBytes(StandardCharsets.UTF_8);
     }
 
     public String sign(Quote quote) {

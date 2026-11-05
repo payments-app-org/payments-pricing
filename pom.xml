@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <platform.version>0.1.0</platform.version>
+        <resilience4j.version>2.4.0</resilience4j.version>
     </properties>
 
     <dependencies>
@@ -28,6 +29,26 @@
             <groupId>com.paymentsapp</groupId>
             <artifactId>platform</artifactId>
             <version>${platform.version}</version>
+        </dependency>
+        <!-- Redis: кэш профиля и групп поставщиков -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+        <!-- Circuit breaker, retry, bulkhead для account и biller -->
+        <dependency>
+            <groupId>io.github.resilience4j</groupId>
+            <artifactId>resilience4j-spring-boot4</artifactId>
+            <version>${resilience4j.version}</version>
+        </dependency>
+        <!-- Кэш Hibernate второго уровня для тарифов и курсов -->
+        <dependency>
+            <groupId>org.hibernate.orm</groupId>
+            <artifactId>hibernate-jcache</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>jcache</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

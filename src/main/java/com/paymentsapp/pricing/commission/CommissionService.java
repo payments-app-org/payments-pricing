@@ -1,49 +1,38 @@
 package com.paymentsapp.pricing.commission;
 
+import static com.paymentsapp.pricing.error.PricingError.*;
+
+import com.paymentsapp.platform.crypto.Hashing;
+import com.paymentsapp.platform.error.DomainException;
 import com.paymentsapp.pricing.account.AccountClient;
 import com.paymentsapp.pricing.account.AccountClient.AccountUser;
+import com.paymentsapp.pricing.biller.BillerClient;
 import com.paymentsapp.pricing.quote.Quote;
+import com.paymentsapp.pricing.quote.QuoteProperties;
 import com.paymentsapp.pricing.quote.QuoteSigner;
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
-import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.UUID;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 @Service
 public class CommissionService {
 
-    // Сколько живёт котировка: за это время пользователь должен нажать «Перевести»
-    static final Duration QUOTE_TTL = Duration.ofMinutes(10);
-
     private final AccountClient accountClient;
-    private final com.paymentsapp.pricing.biller.BillerClient billerClient;
+    private final BillerClient billerClient;
     private final CommissionRuleRepository rules;
     private final QuoteSigner signer;
+    private final QuoteProperties quoteProperties;
     private final Clock clock;
 
-    @Autowired
-    public CommissionService(AccountClient accountClient, com.paymentsapp.pricing.biller.BillerClient billerClient,
-                             CommissionRuleRepository rules, QuoteSigner signer) {
-        this(accountClient, billerClient, rules, signer, Clock.systemUTC());
-    }
-
-    CommissionService(AccountClient accountClient, CommissionRuleRepository rules, QuoteSigner signer, Clock clock) {
-        this(accountClient, null, rules, signer, clock);
-    }
-
-    CommissionService(AccountClient accountClient, com.paymentsapp.pricing.biller.BillerClient billerClient,
-                      CommissionRuleRepository rules, QuoteSigner signer, Clock clock) {
+    public CommissionService(AccountClient accountClient, BillerClient billerClient, CommissionRuleRepository rules,
+                             QuoteSigner signer, QuoteProperties quoteProperties, Clock clock) {
         this.accountClient = accountClient;
         this.billerClient = billerClient;
         this.rules = rules;
         this.signer = signer;
+        this.quoteProperties = quoteProperties;
         this.clock = clock;
     }
 
@@ -56,7 +45,7 @@ public class CommissionService {
     // providerCode — для оплаты поставщику (BILL): тариф по группе поставщика из biller
     public Commission calculate(UUID userId, UUID sourceAccountId, OperationType operationType, BigDecimal amount,
                                 String recipientCardNumber, UUID destinationAccountId, String providerCode) {
-        AccountUser user = accountClient.getUser(userId);
+        AccountUser user = accountClient.getUserWithAccount(userId, sourceAccountId);
         AccountClient.AccountRef sourceAccount = user.account(sourceAccountId);
         Party source = sourceAccount.isWallet() ? Party.WALLET
                 : sourceAccount.isSbpSource() ? Party.SBP
@@ -72,33 +61,34 @@ public class CommissionService {
             case REQUISITES_OUR -> Party.OUR_LEGAL_ENTITY;
             case BILL -> {
                 if (providerCode == null || providerCode.isBlank()) {
-                    throw new IllegalArgumentException("Не выбран поставщик");
+                    throw new DomainException(PROVIDER_REQUIRED);
                 }
                 recipientKey = providerCode;
                 String group = billerClient.providerGroup(providerCode)
-                        .orElseThrow(() -> new OperationNotAvailableException("Поставщик не найден"));
-                yield Party.valueOf(group);
+                        .orElseThrow(() -> new DomainException(PROVIDER_NOT_FOUND));
+                yield billParty(group);
             }
             case CARD2CARD -> {
                 if (recipientCardNumber == null) {
-                    throw new IllegalArgumentException("Не указан номер карты получателя");
+                    throw new DomainException(RECIPIENT_CARD_REQUIRED);
                 }
                 recipientKey = recipientCardNumber;
                 yield accountClient.isOurCard(recipientCardNumber) ? Party.OUR_CARD : Party.OTHER_BANK_CARD;
             }
             case OWN_TRANSFER -> {
                 if (destinationAccountId == null) {
-                    throw new IllegalArgumentException("Не выбран счёт зачисления");
+                    throw new DomainException(DESTINATION_REQUIRED);
                 }
                 recipientKey = destinationAccountId.toString();
-                AccountClient.AccountRef target = user.account(destinationAccountId);
+                AccountClient.AccountRef target = accountClient.getUserWithAccount(userId, destinationAccountId)
+                        .account(destinationAccountId);
                 yield target.isWallet() ? Party.WALLET : target.isExternal() ? Party.OTHER_BANK_CARD : Party.OUR_CARD;
             }
         };
 
         CommissionRule rule = rules.findByOperationTypeAndSourceTypeAndDestinationTypeAndSubscription(
                         operationType, source, destination, user.subscription())
-                .orElseThrow(() -> new OperationNotAvailableException("Такой перевод недоступен"));
+                .orElseThrow(() -> new DomainException(OPERATION_NOT_AVAILABLE));
 
         // Бесплатный лимит в месяц (переводы по СБП) — считаем от того, сколько уже переведено
         BigDecimal used = rule.getFreeMonthlyAmount() == null ? BigDecimal.ZERO
@@ -107,17 +97,22 @@ public class CommissionService {
         BigDecimal freeLeft = rule.getFreeMonthlyAmount() == null ? null : rule.freeLeft(used);
         Quote quote = new Quote(UUID.randomUUID(), userId, sourceAccountId, operationType.name(), destination.name(),
                 recipientKey == null ? null : sha256(recipientKey), amount, commission, rule.getId(),
-                Instant.now(clock).plus(QUOTE_TTL));
+                Instant.now(clock).plus(quoteProperties.ttl()));
         return new Commission(operationType, user.subscription(), source, destination, amount, rule.getPercent(),
                 rule.getMinFee(), rule.getFixedFee(), rule.getMaxFee(), rule.getFreeMonthlyAmount(), freeLeft, commission, amount.add(commission), rule.getId(), quote.quoteId(),
                 quote.expiresAt(), signer.sign(quote));
     }
 
-    static String sha256(String value) {
+    // Группа поставщика из biller — получатель в тарифной сетке
+    private static Party billParty(String group) {
         try {
-            return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException(e);
+            return Party.valueOf(group);
+        } catch (IllegalArgumentException e) {
+            throw new DomainException(OPERATION_NOT_AVAILABLE);
         }
+    }
+
+    static String sha256(String value) {
+        return Hashing.sha256Hex(value);
     }
 }
